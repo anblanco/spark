@@ -210,6 +210,16 @@ def get_sock_file_to_executor(timeout: Optional[int] = -1) -> Generator[IO, None
     try:
         yield sock_file
     finally:
+        # SPARK-53759: Flush before close to ensure all buffered data reaches
+        # the socket. On Python 3.12+, changed GC finalization ordering
+        # (https://github.com/python/cpython/issues/97922) can cause the
+        # underlying socket to close before BufferedRWPair flushes its write
+        # buffer, resulting in data loss and EOFException on the JVM side.
+        # This mirrors the explicit flush in daemon.py's worker() finally block.
+        try:
+            sock_file.flush()
+        except Exception:
+            pass
         sock_file.close()
 
 

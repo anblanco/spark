@@ -272,6 +272,25 @@ class WorkerPoolCrashTest(PySparkTestCase):
         rdd.map(lambda x: os.getpid()).collect()
 
 
+class SimpleWorkerFlushTest(PySparkTestCase):
+    """SPARK-53759: Verify the simple-worker path flushes before close."""
+
+    @classmethod
+    def conf(cls):
+        _conf = super().conf()
+        _conf.set("spark.python.use.daemon", "false")
+        return _conf
+
+    def test_simple_worker_basic_operation(self):
+        # SPARK-53759: On Python 3.12+, the simple-worker path crashed with
+        # EOFException because BufferedRWPair was not flushed before the socket
+        # closed during process exit. The fix adds an explicit flush() in the
+        # finally block of get_sock_file_to_executor() in worker_util.py.
+        rdd = self.sc.parallelize(range(100), 1)
+        result = rdd.map(lambda x: x * 2).collect()
+        self.assertEqual(result, [x * 2 for x in range(100)])
+
+
 if __name__ == "__main__":
     from pyspark.testing import main
 
